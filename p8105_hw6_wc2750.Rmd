@@ -7,6 +7,7 @@ output: github_document
 ```{r setup, include = F}
 library(tidyverse)
 library(modelr)
+library(dplyr)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -205,3 +206,64 @@ cv_df %>%
 ```
 
 Based on the cross-validation by comparing rmse value, my proposed model has the lowest rmse, indictaing it is best model among these three models. Model 3 is also a good choice since it has relatively smaller number of predictors and also a small rmse.
+
+## Problem 3
+Load weather data
+```{r message = F, warning = F}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+Bootstrap 5000 samples with results in estimates and R squared
+```{r}
+set.seed(1)
+
+bootstrap_df = 
+  weather_df %>%
+  bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
+    results_1 = map(models, broom::glance),
+    results_2 = map(models, broom::tidy)) %>%
+  select(results_1, results_2) %>%
+  unnest(c(results_1, results_2), names_repair = "minimal") %>%
+  select(term, estimate, r.squared) %>%
+  mutate(term = case_when(term == "(Intercept)" ~ "intercept",
+                          term == "tmin" ~ "tmin")) %>%
+  pivot_wider(names_from = term,
+              values_from = estimate) %>%
+  unnest(c(intercept, tmin)) %>%
+  mutate(log = log(intercept * tmin))
+
+bootstrap_df
+```
+
+Plot the distribution of R squared and log(β0 * β1)
+```{r}
+bootstrap_df %>%
+  ggplot(aes(x = r.squared)) + geom_density() +
+  labs(x = "R squared", title = "Distribution of R squared with 5000 bootstrap samples")
+
+bootstrap_df %>%
+  ggplot(aes(x = log)) + geom_density() +
+  labs(x = "log(β0 * β1)", title = "Distribution of log(β0 * β1) with 5000 bootstrap samples")
+```
+The shape of the distribution of R squared looks like normal but it has skewness to the left. The mean of R squared is higher than 90%, indicating a high variations in the outcome - tmax can be explained by the predictor - tmin. The distribution of log(β0 * β1) is very close to normal, and the mean is around 2.01.
+
+Identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for R squared and log(β0 * β1)
+```{r}
+bootstrap_df %>%
+  summarize(percentile = scales::percent(c(0.025, 0.975), accuracy = 0.1),
+            conf_rsquared = quantile(r.squared, probs = c(0.025, 0.975)),
+            conf_log = quantile(log, probs = c(0.025, 0.975)))
+```
+
