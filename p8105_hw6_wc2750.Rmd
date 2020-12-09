@@ -257,13 +257,16 @@ bootstrap_df %>%
   ggplot(aes(x = log)) + geom_density() +
   labs(x = "log(β0 * β1)", title = "Distribution of log(β0 * β1) with 5000 bootstrap samples")
 ```
+
 The shape of the distribution of R squared looks like normal but it has skewness to the left. The mean of R squared is higher than 90%, indicating a high variations in the outcome - tmax can be explained by the predictor - tmin. The distribution of log(β0 * β1) is very close to normal, and the mean is around 2.01.
+
 
 Identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for R squared and log(β0 * β1)
 ```{r}
 bootstrap_df %>%
   summarize(percentile = scales::percent(c(0.025, 0.975), accuracy = 0.1),
             conf_rsquared = quantile(r.squared, probs = c(0.025, 0.975)),
-            conf_log = quantile(log, probs = c(0.025, 0.975)))
+            conf_log = quantile(log, probs = c(0.025, 0.975))) %>%
+  knitr::kable()
 ```
 
